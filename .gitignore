@@ -1,0 +1,73 @@
+# ---------------------------
+# Node.js / React
+# ---------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json
+yarn.lock
+dist/
+build/
+.cache/
+.vite/
+
+# ---------------------------
+# Python
+# ---------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+.eggs/
+*.log
+*.sqlite3
+*.db
+.DS_Store
+.env
+venv/
+ENV/
+env/
+.venv/
+
+# ---------------------------
+# IDE / OS files
+# ---------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+*.tmp
+*.orig
+Thumbs.db
+.DS_Store
+
+# ---------------------------
+# PostgreSQL / Database
+# ---------------------------
+*.sql~
+*.dump
+*.backup
+
+# ---------------------------
+# Project Specific
+# ---------------------------
+# Ignore PowerShell history and temp files
+*.ps1~
+*.bat~
+*.sh~
+
+# Ignore test output
+coverage/
+htmlcov/
+pytest_cache/
+
+# Ignore local environment configs
+config.json
+*.local
+.env.local
+NUL

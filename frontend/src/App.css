@@ -1,0 +1,42 @@
+.parent-1{
+  position:absolute;
+ top: 0%;
+  display: flex;
+  width:100vw;
+  height:40px;
+  gap:0px;
+
+
+
+  justify-content: center;
+  align-items: end;
+  background-color: rgb(153, 189, 177);
+
+}
+.head{
+  position:absolute;
+  top:0px;
+  left:0px;
+
+
+align-self: baseline;
+
+overflow-x: visible;
+
+
+
+
+}
+
+input{
+  margin-right: 0%;
+
+  overflow-x: scroll;
+  overflow-y: scroll;
+  width:200px;
+  height:60px;
+  text-decoration: wavy;
+  font-family: monospace;
+  text-wrap:row;
+  text-size-adjust: 20px;
+}
