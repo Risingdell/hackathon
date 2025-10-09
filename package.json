@@ -7,7 +7,7 @@
   },
   "name": "nl2sql_project",
   "version": "1.0.0",
-  "description": "",
+  "description": "Convert natural language queries to SQL and execute them against a PostgreSQL database using AI.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -15,5 +15,13 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Risingdell/hackathon.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Risingdell/hackathon/issues"
+  },
+  "homepage": "https://github.com/Risingdell/hackathon#readme"
 }

@@ -1,8 +1,7 @@
-﻿transformers[torch]
-langchain
-fastapi
-uvicorn
+﻿fastapi==0.115.6
+uvicorn==0.34.0
+python-dotenv==1.1.1
+httpx==0.28.1
+pydantic==2.10.6
 sqlalchemy
 psycopg2-binary
-python-dotenv
-streamlit
