@@ -1,31 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dir:*)",
-      "mcp__ide__getDiagnostics",
-      "Bash(python -m pip install:*)",
-      "Bash(venv\\Scripts\\python.exe -m pip install:*)",
-      "Bash(venvScriptspython.exe -m pip:*)",
-      "Bash(findstr:*)",
-      "Bash(\"venv/Scripts/python.exe\" -m pip list)",
-      "Bash(\"venv/Scripts/python.exe\" -m uvicorn ai_server.ai_server:app --reload --port 5001)",
-      "Bash(timeout:*)",
-      "Bash(\"venv/Scripts/python.exe\" -c \"import sys; print(sys.executable)\")",
-      "Bash(\"venv/Scripts/python.exe\" -c \"import dotenv; print(dotenv.__file__)\")",
-      "Bash(\"venv/Scripts/python.exe\" -m pip install python-dotenv httpx)",
-      "Bash(\"venv/Scripts/python.exe\" -c \"from dotenv import load_dotenv; print(''Success'')\")",
-      "Bash(\"venv/Scripts/python.exe\" -m pip uninstall python-dotenv -y)",
-      "Bash(\"venv/Scripts/python.exe\" -m pip install python-dotenv)",
-      "Bash(\"venv/Scripts/python.exe\" -c \"from dotenv import load_dotenv; print(''Dotenv imported successfully!'')\")",
-      "Bash(curl http://127.0.0.1:5001/health)",
-      "Bash(curl -X POST http://127.0.0.1:5001/nl2sql -H \"Content-Type: application/json\" -d \"{\"\"prompt\"\": \"\"Show all products\"\", \"\"include_schema\"\": true}\")",
-      "Bash(curl http://127.0.0.1:5001/test-db)",
-      "Bash(curl -X POST http://127.0.0.1:5001/nl2sql -H \"Content-Type: application/json\" -d \"{\"\"prompt\"\": \"\"Show all customers\"\", \"\"include_schema\"\": true}\")",
-      "Bash(curl -X POST http://127.0.0.1:5001/nl2sql -H \"Content-Type: application/json\" -d \"{\"\"prompt\"\": \"\"show product with highest price\"\", \"\"include_schema\"\": true}\")",
-      "Bash(curl -X POST http://127.0.0.1:5001/nl2sql -H \"Content-Type: application/json\" -d \"{\"\"prompt\"\": \"\"test query\"\", \"\"include_schema\"\": true}\")",
-      "Bash(curl -X POST http://127.0.0.1:5001/nl2sql -H \"Content-Type: application/json\" -d \"{\"\"prompt\"\": \"\"show all customers\"\", \"\"include_schema\"\": true}\")",
-      "Bash(curl -X POST http://127.0.0.1:5001/nl2sql -H \"Content-Type: application/json\" -d \"{\"\"prompt\"\": \"\"show all products\"\", \"\"include_schema\"\": true}\")",
-      "Bash(\"venv/Scripts/python.exe\" -c \"from dotenv import load_dotenv; import os; from pathlib import Path; env_path = Path(''.env''); load_dotenv(dotenv_path=env_path); print(f''Model: {os.getenv(\"\"HUGGINGFACE_MODEL\"\")}''); print(f''API Key: {os.getenv(\"\"HUGGINGFACE_API_KEY\"\")[:20]}...'')\")"
+      "Bash(python:*)",
+      "Bash(timeout:*)"
     ],
     "deny": [],
     "ask": []

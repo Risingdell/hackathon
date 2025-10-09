@@ -10,8 +10,9 @@
   "description": "Convert natural language queries to SQL and execute them against a PostgreSQL database using AI.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "dev": "cd frontend && npm run dev"
+}
+,
   "keywords": [],
   "author": "",
   "license": "ISC",
