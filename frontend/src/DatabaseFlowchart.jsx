@@ -1,736 +1,669 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 function DatabaseFlowchart({ schema, darkMode, theme }) {
-  const canvasRef = useRef(null);
-  const [selectedTable, setSelectedTable] = useState(null);
-  const [hoveredTable, setHoveredTable] = useState(null);
-  const [zoom, setZoom] = useState(0.8);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [contentBounds, setContentBounds] = useState({ minX: 0, maxX: 1000, minY: 0, maxY: 1000 });
-  const [tablePositions, setTablePositions] = useState({});
+  const [tableStates, setTableStates] = useState({});
+  const [draggingTable, setDraggingTable] = useState(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [searchQuery, setSearchQuery] = useState('');
-  const [highlightedTables, setHighlightedTables] = useState(new Set());
   const [showRelationships, setShowRelationships] = useState(true);
-  const [showMinimap, setShowMinimap] = useState(true);
+  const containerRef = useRef(null);
+  const svgRef = useRef(null);
 
-  // Search functionality
+  // Initialize table positions and states
   useEffect(() => {
     if (!schema?.tables) return;
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      const matches = new Set();
+    const initialStates = {};
+    const tableWidth = 300;
+    const tableHeight = 60;
+    const horizontalSpacing = 200;
+    const verticalSpacing = 200;
+    const cols = Math.min(Math.ceil(Math.sqrt(schema.tables.length)), 3);
 
-      schema.tables.forEach(table => {
-        if (table.name.toLowerCase().includes(query)) {
-          matches.add(table.name);
-        }
-        table.columns?.forEach(col => {
-          if (col.name.toLowerCase().includes(query) || col.type.toLowerCase().includes(query)) {
-            matches.add(table.name);
-          }
-        });
-      });
-
-      setHighlightedTables(matches);
-    } else {
-      setHighlightedTables(new Set());
-    }
-  }, [searchQuery, schema]);
-
-  useEffect(() => {
-    if (!schema || !canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
-
-    ctx.clearRect(0, 0, rect.width, rect.height);
-
-    ctx.save();
-    ctx.translate(pan.x, pan.y);
-    ctx.scale(zoom, zoom);
-
-    drawDatabase(ctx, schema, rect.width, rect.height);
-
-    ctx.restore();
-  }, [schema, darkMode, theme, zoom, pan, selectedTable, hoveredTable, highlightedTables, showRelationships]);
-
-  const drawDatabase = (ctx, schema, canvasWidth, canvasHeight) => {
-    if (!schema?.tables) return;
-
-    const tables = schema.tables;
-    const relationships = schema.relationships || [];
-
-    const tableWidth = 280;
-    const tableHeight = 50;
-    const horizontalSpacing = 180;
-    const verticalSpacing = 160;
-    const cols = Math.min(Math.ceil(Math.sqrt(tables.length)), 4);
-
-    const totalWidth = cols * (tableWidth + horizontalSpacing);
-    const startX = Math.max(100, (canvasWidth / zoom - totalWidth) / 2);
-    const startY = 80;
-
-    const positions = {};
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-
-    tables.forEach((table, index) => {
-      const col = index % cols;
-      const row = Math.floor(index / cols);
-      const x = startX + col * (tableWidth + horizontalSpacing);
-      const y = startY + row * (tableHeight + verticalSpacing);
-      positions[table.name] = { x, y, width: tableWidth, height: tableHeight, table };
-
-      minX = Math.min(minX, x);
-      maxX = Math.max(maxX, x + tableWidth);
-      minY = Math.min(minY, y);
-      maxY = Math.max(maxY, y + 200);
-    });
-
-    setTablePositions(positions);
-    setContentBounds({ minX: minX - 100, maxX: maxX + 100, minY: minY - 100, maxY: maxY + 100 });
-
-    if (showRelationships) {
-      relationships.forEach(rel => {
-        const source = positions[rel.source];
-        const target = positions[rel.target];
-        if (source && target) {
-          const isHighlighted = selectedTable === rel.source || selectedTable === rel.target;
-          drawRelationship(ctx, source, target, rel, darkMode, theme, isHighlighted);
-        }
-      });
-    }
-
-    tables.forEach((table) => {
-      const pos = positions[table.name];
-      const isSelected = selectedTable === table.name;
-      const isHovered = hoveredTable === table.name;
-      const isHighlighted = highlightedTables.has(table.name);
-      const actualHeight = drawTable(ctx, table, pos.x, pos.y, tableWidth, darkMode, theme, isSelected, isHovered, isHighlighted);
-      positions[table.name].height = actualHeight;
-    });
-  };
-
-  const drawTable = (ctx, table, x, y, width, darkMode, theme, isSelected, isHovered, isHighlighted) => {
-    const headerHeight = 50;
-    const rowHeight = 28;
-    const columnCount = table.columns?.length || 0;
-    const totalHeight = headerHeight + (columnCount * rowHeight);
-
-    // Shadow
-    if (isSelected || isHovered) {
-      ctx.shadowColor = isSelected ? theme.accent : theme.primary;
-      ctx.shadowBlur = isSelected ? 20 : 12;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 4;
-    } else {
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
-      ctx.shadowBlur = 8;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 2;
-    }
-
-    // Border
-    if (isHighlighted) {
-      ctx.strokeStyle = theme.success;
-      ctx.lineWidth = 3;
-    } else if (isSelected) {
-      ctx.strokeStyle = theme.accent;
-      ctx.lineWidth = 3;
-    } else if (isHovered) {
-      ctx.strokeStyle = theme.primary;
-      ctx.lineWidth = 2;
-    } else {
-      ctx.strokeStyle = darkMode ? theme.border : '#e2e8f0';
-      ctx.lineWidth = 1;
-    }
-
-    // Card background
-    ctx.fillStyle = darkMode ? theme.cardBg : '#ffffff';
-    ctx.beginPath();
-    ctx.roundRect(x, y, width, totalHeight, 8);
-    ctx.fill();
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetY = 0;
-
-    // Header
-    const gradient = ctx.createLinearGradient(x, y, x, y + headerHeight);
-    if (isSelected || isHighlighted) {
-      gradient.addColorStop(0, theme.primary);
-      gradient.addColorStop(1, theme.accent);
-    } else {
-      gradient.addColorStop(0, darkMode ? '#334155' : '#64748b');
-      gradient.addColorStop(1, darkMode ? '#1e293b' : '#475569');
-    }
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.roundRect(x, y, width, headerHeight, [8, 8, 0, 0]);
-    ctx.fill();
-
-    // Table name
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(table.name, x + 15, y + 30);
-
-    // Column count badge
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-    const badgeText = `${columnCount}`;
-    ctx.font = 'bold 11px sans-serif';
-    const badgeWidth = ctx.measureText(badgeText).width;
-    ctx.beginPath();
-    ctx.roundRect(x + width - badgeWidth - 25, y + 15, badgeWidth + 16, 20, 10);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'center';
-    ctx.fillText(badgeText, x + width - badgeWidth / 2 - 17, y + 28);
-
-    // Columns
-    ctx.font = '13px "SF Mono", "Monaco", "Consolas", monospace';
-    table.columns?.forEach((col, idx) => {
-      const rowY = y + headerHeight + (idx * rowHeight);
-
-      // Alternating rows
-      if (idx % 2 === 1) {
-        ctx.fillStyle = darkMode ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)';
-        ctx.fillRect(x + 1, rowY, width - 2, rowHeight);
-      }
-
-      // Column name
-      ctx.fillStyle = darkMode ? theme.text : '#1e293b';
-      ctx.textAlign = 'left';
-      ctx.font = '13px "SF Mono", "Monaco", "Consolas", monospace';
-      ctx.fillText(col.name, x + 15, rowY + 18);
-
-      // Type
-      ctx.fillStyle = darkMode ? theme.textSecondary : '#64748b';
-      ctx.font = '10px sans-serif';
-      ctx.fillText(col.type.toUpperCase(), x + 15, rowY + 18 + 12);
-
-      // Indicators
-      let indicatorX = x + width - 15;
-
-      if (col.primary_key) {
-        ctx.fillStyle = theme.warning;
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'right';
-        ctx.fillText('●', indicatorX, rowY + 16);
-        indicatorX -= 20;
-      }
-
-      if (!col.nullable) {
-        ctx.fillStyle = theme.error;
-        ctx.font = 'bold 12px sans-serif';
-        ctx.textAlign = 'right';
-        ctx.fillText('*', indicatorX, rowY + 16);
-      }
-
-      ctx.font = '13px "SF Mono", "Monaco", "Consolas", monospace';
-    });
-
-    return totalHeight;
-  };
-
-  const drawRelationship = (ctx, source, target, rel, darkMode, theme, isHighlighted) => {
-    const startX = source.x + source.width / 2;
-    const startY = source.y + source.height;
-    const endX = target.x + target.width / 2;
-    const endY = target.y;
-
-    ctx.strokeStyle = isHighlighted ? theme.accent : (darkMode ? theme.primary + '80' : theme.secondary + '80');
-    ctx.lineWidth = isHighlighted ? 2.5 : 1.5;
-    ctx.setLineDash(isHighlighted ? [6, 3] : []);
-
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    const controlPointOffset = Math.abs(endY - startY) / 2;
-    ctx.bezierCurveTo(
-      startX, startY + controlPointOffset,
-      endX, endY - controlPointOffset,
-      endX, endY
-    );
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Arrow
-    const arrowSize = 8;
-    ctx.beginPath();
-    ctx.moveTo(endX, endY);
-    ctx.lineTo(endX - arrowSize / 2, endY - arrowSize);
-    ctx.lineTo(endX + arrowSize / 2, endY - arrowSize);
-    ctx.closePath();
-    ctx.fillStyle = isHighlighted ? theme.accent : (darkMode ? theme.primary + '80' : theme.secondary + '80');
-    ctx.fill();
-  };
-
-  const handleCanvasClick = (e) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = (e.clientX - rect.left - pan.x) / zoom;
-    const mouseY = (e.clientY - rect.top - pan.y) / zoom;
-
-    let clickedTable = null;
-    Object.entries(tablePositions).forEach(([name, pos]) => {
-      if (mouseX >= pos.x && mouseX <= pos.x + pos.width &&
-          mouseY >= pos.y && mouseY <= pos.y + pos.height) {
-        clickedTable = name;
+    schema.tables.forEach((table, index) => {
+      if (!tableStates[table.name]) {
+        const col = index % cols;
+        const row = Math.floor(index / cols);
+        initialStates[table.name] = {
+          x: 100 + col * (tableWidth + horizontalSpacing),
+          y: 100 + row * (tableHeight + verticalSpacing),
+          minimized: false,
+          maximized: false,
+          zIndex: index
+        };
       }
     });
 
-    setSelectedTable(clickedTable);
+    setTableStates(prev => ({ ...prev, ...initialStates }));
+  }, [schema]);
+
+  const handleMouseDown = (e, tableName) => {
+    if (e.target.closest('.table-action-btn')) return;
+
+    setDraggingTable(tableName);
+    const tableState = tableStates[tableName];
+    setDragOffset({
+      x: e.clientX - tableState.x,
+      y: e.clientY - tableState.y
+    });
+
+    // Bring to front
+    const maxZ = Math.max(...Object.values(tableStates).map(s => s.zIndex), 0);
+    setTableStates(prev => ({
+      ...prev,
+      [tableName]: { ...prev[tableName], zIndex: maxZ + 1 }
+    }));
   };
 
-  const handleCanvasMouseMove = (e) => {
-    if (isDragging) {
-      const newPanX = e.clientX - dragStart.x;
-      const newPanY = e.clientY - dragStart.y;
-      setPan({ x: newPanX, y: newPanY });
-    } else {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+  const handleMouseMove = (e) => {
+    if (!draggingTable) return;
 
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = (e.clientX - rect.left - pan.x) / zoom;
-      const mouseY = (e.clientY - rect.top - pan.y) / zoom;
+    const newX = e.clientX - dragOffset.x;
+    const newY = e.clientY - dragOffset.y;
 
-      let hoveredName = null;
-      Object.entries(tablePositions).forEach(([name, pos]) => {
-        if (mouseX >= pos.x && mouseX <= pos.x + pos.width &&
-            mouseY >= pos.y && mouseY <= pos.y + pos.height) {
-          hoveredName = name;
-        }
-      });
-
-      setHoveredTable(hoveredName);
-    }
-  };
-
-  const handleWheel = (e) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newZoom = Math.min(Math.max(zoom * delta, 0.3), 2.5);
-
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-
-      const zoomRatio = newZoom / zoom;
-      const newPanX = mouseX - (mouseX - pan.x) * zoomRatio;
-      const newPanY = mouseY - (mouseY - pan.y) * zoomRatio;
-
-      setPan({ x: newPanX, y: newPanY });
-    }
-
-    setZoom(newZoom);
-  };
-
-  const handleMouseDown = (e) => {
-    setIsDragging(true);
-    setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    setTableStates(prev => ({
+      ...prev,
+      [draggingTable]: {
+        ...prev[draggingTable],
+        x: Math.max(0, newX),
+        y: Math.max(0, newY)
+      }
+    }));
   };
 
   const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const resetView = () => {
-    setZoom(0.8);
-    setPan({ x: 0, y: 0 });
-    setSelectedTable(null);
-  };
-
-  const fitToScreen = () => {
-    const canvas = canvasRef.current;
-    if (!canvas || !contentBounds) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const padding = 80;
-
-    const contentWidth = contentBounds.maxX - contentBounds.minX;
-    const contentHeight = contentBounds.maxY - contentBounds.minY;
-
-    const scaleX = (rect.width - padding * 2) / contentWidth;
-    const scaleY = (rect.height - padding * 2) / contentHeight;
-    const newZoom = Math.min(scaleX, scaleY, 1.2);
-
-    const centerX = (contentBounds.minX + contentBounds.maxX) / 2;
-    const centerY = (contentBounds.minY + contentBounds.maxY) / 2;
-
-    setPan({
-      x: rect.width / 2 - centerX * newZoom,
-      y: rect.height / 2 - centerY * newZoom
-    });
-    setZoom(newZoom);
-  };
-
-  const exportAsPNG = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const link = document.createElement('a');
-    link.download = `database-schema-${Date.now()}.png`;
-    link.href = canvas.toDataURL('image/png', 1.0);
-    link.click();
+    setDraggingTable(null);
   };
 
   useEffect(() => {
-    fitToScreen();
-  }, [schema]);
+    if (draggingTable) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [draggingTable, dragOffset]);
 
-  const styles = {
-    container: {
+  const toggleMinimize = (tableName) => {
+    setTableStates(prev => ({
+      ...prev,
+      [tableName]: {
+        ...prev[tableName],
+        minimized: !prev[tableName].minimized,
+        maximized: false
+      }
+    }));
+  };
+
+  const toggleMaximize = (tableName) => {
+    setTableStates(prev => ({
+      ...prev,
+      [tableName]: {
+        ...prev[tableName],
+        maximized: !prev[tableName].maximized,
+        minimized: false
+      }
+    }));
+  };
+
+  const filteredTables = schema?.tables?.filter(table => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return table.name.toLowerCase().includes(query) ||
+           table.columns?.some(col =>
+             col.name.toLowerCase().includes(query) ||
+             col.type.toLowerCase().includes(query)
+           );
+  }) || [];
+
+  const resetLayout = () => {
+    const tableWidth = 300;
+    const tableHeight = 60;
+    const horizontalSpacing = 200;
+    const verticalSpacing = 200;
+    const cols = Math.min(Math.ceil(Math.sqrt(schema.tables.length)), 3);
+
+    const newStates = {};
+    schema.tables.forEach((table, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+      newStates[table.name] = {
+        x: 100 + col * (tableWidth + horizontalSpacing),
+        y: 100 + row * (tableHeight + verticalSpacing),
+        minimized: false,
+        maximized: false,
+        zIndex: index
+      };
+    });
+    setTableStates(newStates);
+  };
+
+  const minimizeAll = () => {
+    setTableStates(prev => {
+      const updated = {};
+      Object.keys(prev).forEach(key => {
+        updated[key] = { ...prev[key], minimized: true, maximized: false };
+      });
+      return updated;
+    });
+  };
+
+  const expandAll = () => {
+    setTableStates(prev => {
+      const updated = {};
+      Object.keys(prev).forEach(key => {
+        updated[key] = { ...prev[key], minimized: false, maximized: false };
+      });
+      return updated;
+    });
+  };
+
+  // Helper function to get table dimensions
+  const getTableDimensions = (tableName) => {
+    const state = tableStates[tableName];
+    if (!state) return null;
+
+    const width = state.maximized ? 600 : 300;
+    const headerHeight = 50;
+
+    return {
+      x: state.x,
+      y: state.y,
+      width: width,
+      height: headerHeight,
+      centerX: state.x + width / 2,
+      centerY: state.y + headerHeight / 2,
+      bottom: state.y + headerHeight,
+      top: state.y
+    };
+  };
+
+  // Force re-render when dragging to update SVG lines
+  const [, forceUpdate] = useState({});
+  useEffect(() => {
+    if (draggingTable) {
+      forceUpdate({});
+    }
+  }, [tableStates, draggingTable]);
+
+  return (
+    <div style={{
       width: '100%',
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      background: darkMode ? theme.background : '#f8fafc',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    },
-    toolbar: {
-      padding: '0.75rem 1.25rem',
-      background: darkMode ? theme.cardBg : '#ffffff',
-      borderBottom: `1px solid ${theme.border}`,
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      gap: '1rem',
-      flexWrap: 'wrap',
-      boxShadow: darkMode ? 'none' : '0 1px 3px rgba(0,0,0,0.05)'
-    },
-    title: {
-      margin: 0,
-      color: theme.text,
-      fontSize: '1.1rem',
-      fontWeight: '600',
-      letterSpacing: '-0.01em'
-    },
-    searchContainer: {
-      flex: '1 1 250px',
-      maxWidth: '350px',
-      position: 'relative'
-    },
-    searchInput: {
-      width: '100%',
-      padding: '0.5rem 0.75rem 0.5rem 2.25rem',
-      fontSize: '0.875rem',
-      border: `1px solid ${theme.border}`,
-      borderRadius: '6px',
-      background: darkMode ? theme.background : '#f8fafc',
-      color: theme.text,
-      outline: 'none',
-      transition: 'all 0.2s'
-    },
-    searchIcon: {
-      position: 'absolute',
-      left: '0.75rem',
-      top: '50%',
-      transform: 'translateY(-50%)',
-      color: theme.textSecondary,
-      pointerEvents: 'none',
-      fontSize: '1rem'
-    },
-    controls: {
-      display: 'flex',
-      gap: '0.5rem',
-      alignItems: 'center'
-    },
-    button: {
-      padding: '0.5rem 0.875rem',
-      fontSize: '0.813rem',
-      fontWeight: '500',
-      border: 'none',
-      borderRadius: '6px',
-      cursor: 'pointer',
-      transition: 'all 0.15s',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '0.375rem',
-      whiteSpace: 'nowrap'
-    },
-    iconButton: {
-      padding: '0.5rem',
-      fontSize: '1.125rem',
-      border: 'none',
-      borderRadius: '6px',
-      cursor: 'pointer',
-      transition: 'all 0.15s',
-      background: 'transparent',
-      color: theme.text,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      minWidth: '36px'
-    },
-    zoomDisplay: {
-      fontSize: '0.813rem',
-      fontWeight: '500',
-      color: theme.textSecondary,
-      minWidth: '45px',
-      textAlign: 'center',
-      fontVariantNumeric: 'tabular-nums'
-    },
-    statusBar: {
-      padding: '0.5rem 1.25rem',
-      background: darkMode ? 'rgba(15, 23, 42, 0.6)' : 'rgba(248, 250, 252, 0.9)',
-      borderBottom: `1px solid ${theme.border}`,
-      display: 'flex',
-      gap: '1.5rem',
-      fontSize: '0.813rem',
-      color: theme.textSecondary,
-      backdropFilter: 'blur(8px)'
-    },
-    statusItem: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '0.375rem'
-    },
-    canvasWrapper: {
-      flex: 1,
-      overflow: 'hidden',
-      position: 'relative'
-    },
-    canvas: {
-      width: '100%',
-      height: '100%'
-    },
-    floatingInfo: {
-      position: 'absolute',
-      bottom: '1rem',
-      left: '1rem',
-      background: darkMode ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-      padding: '0.625rem 0.875rem',
-      borderRadius: '8px',
-      border: `1px solid ${theme.border}`,
-      fontSize: '0.75rem',
-      color: theme.textSecondary,
-      backdropFilter: 'blur(12px)',
-      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-      display: 'flex',
-      gap: '1rem'
-    },
-    selectedInfo: {
-      position: 'absolute',
-      top: '1rem',
-      right: '1rem',
-      background: darkMode ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-      padding: '0.75rem 1rem',
-      borderRadius: '8px',
-      border: `2px solid ${theme.accent}`,
-      fontSize: '0.875rem',
-      color: theme.text,
-      backdropFilter: 'blur(12px)',
-      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-      maxWidth: '250px'
-    }
-  };
-
-  return (
-    <div style={styles.container}>
+      background: theme.background,
+      overflow: 'hidden'
+    }}>
       {/* Toolbar */}
-      <div style={styles.toolbar}>
-        <h2 style={styles.title}>Database Schema</h2>
+      <div style={{
+        padding: '1rem 1.5rem',
+        background: theme.cardBg,
+        borderBottom: `1px solid ${theme.border}`,
+        display: 'flex',
+        gap: '1rem',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        <h2 style={{
+          margin: 0,
+          color: theme.text,
+          fontSize: '1.2rem',
+          fontWeight: '600'
+        }}>
+          Database Schema
+        </h2>
 
-        <div style={styles.searchContainer}>
-          <span style={styles.searchIcon}>🔍</span>
+        <div style={{ position: 'relative', flex: '1 1 250px', maxWidth: '350px' }}>
+          <span style={{
+            position: 'absolute',
+            left: '0.75rem',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: theme.textSecondary
+          }}>🔍</span>
           <input
             type="text"
             placeholder="Search tables, columns..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={styles.searchInput}
+            style={{
+              width: '100%',
+              padding: '0.5rem 0.75rem 0.5rem 2.25rem',
+              fontSize: '0.875rem',
+              border: `1px solid ${theme.border}`,
+              borderRadius: '6px',
+              background: theme.background,
+              color: theme.text,
+              outline: 'none',
+              transition: 'border-color 0.2s'
+            }}
             onFocus={(e) => e.target.style.borderColor = theme.primary}
             onBlur={(e) => e.target.style.borderColor = theme.border}
           />
         </div>
 
-        <div style={styles.controls}>
+        <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
           <button
             onClick={() => setShowRelationships(!showRelationships)}
             style={{
-              ...styles.button,
-              background: showRelationships ? theme.primary : 'transparent',
+              padding: '0.5rem 1rem',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              background: showRelationships ? theme.accent : 'transparent',
               color: showRelationships ? 'white' : theme.text,
-              border: `1px solid ${showRelationships ? theme.primary : theme.border}`
+              border: `1px solid ${showRelationships ? theme.accent : theme.border}`,
+              borderRadius: '6px',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
             }}
             onMouseEnter={(e) => {
-              if (!showRelationships) e.target.style.background = darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)';
+              if (!showRelationships) {
+                e.target.style.background = darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)';
+              }
             }}
             onMouseLeave={(e) => {
-              if (!showRelationships) e.target.style.background = 'transparent';
+              if (!showRelationships) {
+                e.target.style.background = 'transparent';
+              }
             }}
           >
-            Relations
-          </button>
-
-          <span style={styles.zoomDisplay}>{Math.round(zoom * 100)}%</span>
-
-          <button
-            onClick={() => setZoom(prev => Math.min(prev + 0.1, 2.5))}
-            style={{
-              ...styles.iconButton,
-              background: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)'
-            }}
-            onMouseEnter={(e) => e.target.style.background = darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'}
-            onMouseLeave={(e) => e.target.style.background = darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)'}
-            title="Zoom In"
-          >
-            +
+            🔗 Relations
           </button>
 
           <button
-            onClick={() => setZoom(prev => Math.max(prev - 0.1, 0.3))}
+            onClick={expandAll}
             style={{
-              ...styles.iconButton,
-              background: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)'
-            }}
-            onMouseEnter={(e) => e.target.style.background = darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'}
-            onMouseLeave={(e) => e.target.style.background = darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)'}
-            title="Zoom Out"
-          >
-            −
-          </button>
-
-          <button
-            onClick={fitToScreen}
-            style={{
-              ...styles.button,
-              background: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
-              color: theme.text
-            }}
-            onMouseEnter={(e) => e.target.style.background = darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'}
-            onMouseLeave={(e) => e.target.style.background = darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)'}
-            title="Fit to Screen"
-          >
-            Fit
-          </button>
-
-          <button
-            onClick={resetView}
-            style={{
-              ...styles.button,
-              background: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
-              color: theme.text
-            }}
-            onMouseEnter={(e) => e.target.style.background = darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'}
-            onMouseLeave={(e) => e.target.style.background = darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)'}
-            title="Reset View"
-          >
-            Reset
-          </button>
-
-          <button
-            onClick={exportAsPNG}
-            style={{
-              ...styles.button,
-              background: theme.success,
-              color: 'white'
+              padding: '0.5rem 1rem',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              background: theme.primary,
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              transition: 'opacity 0.2s'
             }}
             onMouseEnter={(e) => e.target.style.opacity = '0.9'}
             onMouseLeave={(e) => e.target.style.opacity = '1'}
-            title="Export as PNG"
           >
-            Export
+            Expand All
+          </button>
+
+          <button
+            onClick={minimizeAll}
+            style={{
+              padding: '0.5rem 1rem',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              background: theme.secondary,
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              transition: 'opacity 0.2s'
+            }}
+            onMouseEnter={(e) => e.target.style.opacity = '0.9'}
+            onMouseLeave={(e) => e.target.style.opacity = '1'}
+          >
+            Minimize All
+          </button>
+
+          <button
+            onClick={resetLayout}
+            style={{
+              padding: '0.5rem 1rem',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              background: theme.success,
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              transition: 'opacity 0.2s'
+            }}
+            onMouseEnter={(e) => e.target.style.opacity = '0.9'}
+            onMouseLeave={(e) => e.target.style.opacity = '1'}
+          >
+            Reset Layout
           </button>
         </div>
       </div>
 
       {/* Status Bar */}
-      <div style={styles.statusBar}>
-        <div style={styles.statusItem}>
+      <div style={{
+        padding: '0.5rem 1.5rem',
+        background: darkMode ? 'rgba(15, 23, 42, 0.6)' : 'rgba(248, 250, 252, 0.9)',
+        borderBottom: `1px solid ${theme.border}`,
+        display: 'flex',
+        gap: '1.5rem',
+        fontSize: '0.813rem',
+        color: theme.textSecondary
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
           <span style={{ color: theme.warning, fontWeight: 'bold' }}>●</span>
           <span>Primary Key</span>
         </div>
-        <div style={styles.statusItem}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
           <span style={{ color: theme.error, fontWeight: 'bold' }}>*</span>
           <span>NOT NULL</span>
         </div>
-        <div style={styles.statusItem}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
           <span>{schema?.tables?.length || 0} Tables</span>
         </div>
-        <div style={styles.statusItem}>
-          <span>{schema?.relationships?.length || 0} Relations</span>
-        </div>
-        {highlightedTables.size > 0 && (
-          <div style={styles.statusItem}>
+        {searchQuery && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
             <span style={{ color: theme.success, fontWeight: 'bold' }}>
-              {highlightedTables.size} Match{highlightedTables.size !== 1 ? 'es' : ''}
+              {filteredTables.length} Match{filteredTables.length !== 1 ? 'es' : ''}
             </span>
           </div>
         )}
       </div>
 
-      {/* Canvas */}
-      <div style={styles.canvasWrapper}>
-        <canvas
-          ref={canvasRef}
-          onWheel={handleWheel}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleCanvasMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onClick={handleCanvasClick}
-          style={{
-            ...styles.canvas,
-            cursor: isDragging ? 'grabbing' : (hoveredTable ? 'pointer' : 'grab')
-          }}
-        />
+      {/* Canvas Area */}
+      <div
+        ref={containerRef}
+        style={{
+          flex: 1,
+          position: 'relative',
+          overflow: 'auto',
+          background: darkMode ? theme.background : '#f8fafc',
+          cursor: draggingTable ? 'grabbing' : 'default'
+        }}
+      >
+        {/* SVG Layer for Relationships */}
+        {showRelationships && schema?.relationships && (
+          <svg
+            ref={svgRef}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none',
+              zIndex: 0
+            }}
+          >
+            <defs>
+              <marker
+                id="arrowhead"
+                markerWidth="10"
+                markerHeight="10"
+                refX="9"
+                refY="3"
+                orient="auto"
+              >
+                <polygon
+                  points="0 0, 10 3, 0 6"
+                  fill={theme.primary}
+                  opacity="0.6"
+                />
+              </marker>
+            </defs>
+            {schema.relationships.map((rel, idx) => {
+              const source = getTableDimensions(rel.source);
+              const target = getTableDimensions(rel.target);
 
-        {/* Floating Controls Info */}
-        <div style={styles.floatingInfo}>
-          <span>🖱️ Scroll: Zoom</span>
-          <span>👆 Drag: Pan</span>
-          <span>👆 Click: Select</span>
+              if (!source || !target) return null;
+
+              // Calculate connection points
+              const startX = source.centerX;
+              const startY = source.bottom;
+              const endX = target.centerX;
+              const endY = target.top;
+
+              // Create curved path
+              const midY = (startY + endY) / 2;
+              const path = `M ${startX} ${startY} Q ${startX} ${midY}, ${(startX + endX) / 2} ${midY} T ${endX} ${endY}`;
+
+              return (
+                <g key={`${rel.source}-${rel.target}-${idx}`}>
+                  <path
+                    d={path}
+                    stroke={theme.primary}
+                    strokeWidth="2"
+                    strokeDasharray="5,5"
+                    fill="none"
+                    opacity="0.6"
+                    markerEnd="url(#arrowhead)"
+                  />
+                  {/* Relationship label */}
+                  <text
+                    x={(startX + endX) / 2}
+                    y={midY}
+                    fill={theme.textSecondary}
+                    fontSize="11"
+                    fontWeight="500"
+                    textAnchor="middle"
+                    style={{
+                      userSelect: 'none',
+                      background: theme.cardBg,
+                      padding: '2px 4px'
+                    }}
+                  >
+                    {rel.type || 'FK'}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        )}
+
+        {/* Floating Info */}
+        <div style={{
+          position: 'fixed',
+          bottom: '1.5rem',
+          left: '1.5rem',
+          background: darkMode ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+          padding: '0.75rem 1rem',
+          borderRadius: '8px',
+          border: `1px solid ${theme.border}`,
+          fontSize: '0.75rem',
+          color: theme.textSecondary,
+          backdropFilter: 'blur(12px)',
+          boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+          display: 'flex',
+          gap: '1rem',
+          zIndex: 1000
+        }}>
+          <span>🖱️ Drag: Move table</span>
+          <span>📏 Click icons: Minimize/Maximize</span>
         </div>
 
-        {/* Selected Table Info */}
-        {selectedTable && tablePositions[selectedTable] && (
-          <div style={styles.selectedInfo}>
-            <div style={{ fontWeight: '600', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-              {selectedTable}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: theme.textSecondary }}>
-              {tablePositions[selectedTable]?.table?.columns?.length || 0} columns
-            </div>
-            <button
-              onClick={() => setSelectedTable(null)}
+        {/* Tables */}
+        {filteredTables.map((table) => {
+          const state = tableStates[table.name] || { x: 0, y: 0, minimized: false, maximized: false, zIndex: 0 };
+          const isHighlighted = searchQuery.trim() && filteredTables.includes(table);
+
+          return (
+            <div
+              key={table.name}
               style={{
-                marginTop: '0.5rem',
-                padding: '0.25rem 0.5rem',
-                fontSize: '0.75rem',
-                background: 'transparent',
-                color: theme.error,
-                border: `1px solid ${theme.error}`,
-                borderRadius: '4px',
-                cursor: 'pointer',
-                width: '100%'
+                position: 'absolute',
+                left: `${state.x}px`,
+                top: `${state.y}px`,
+                width: state.maximized ? '600px' : '300px',
+                background: theme.cardBg,
+                border: `2px solid ${isHighlighted ? theme.success : theme.border}`,
+                borderRadius: '10px',
+                boxShadow: isHighlighted
+                  ? `0 8px 24px ${theme.success}40`
+                  : '0 4px 12px rgba(0,0,0,0.15)',
+                zIndex: state.zIndex,
+                transition: 'width 0.3s ease, box-shadow 0.2s ease',
+                cursor: draggingTable === table.name ? 'grabbing' : 'grab',
+                userSelect: 'none'
               }}
-              onMouseEnter={(e) => {
-                e.target.style.background = theme.error;
-                e.target.style.color = 'white';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.background = 'transparent';
-                e.target.style.color = theme.error;
-              }}
+              onMouseDown={(e) => handleMouseDown(e, table.name)}
             >
-              Clear Selection
-            </button>
-          </div>
-        )}
+              {/* Header */}
+              <div style={{
+                padding: '0.75rem 1rem',
+                background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.accent} 100%)`,
+                borderRadius: '8px 8px 0 0',
+                color: 'white',
+                fontWeight: '600',
+                fontSize: '1rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span>🗂️</span>
+                  <span>{table.name}</span>
+                  <span style={{
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    padding: '0.125rem 0.5rem',
+                    borderRadius: '12px',
+                    fontSize: '0.75rem',
+                    fontWeight: '600'
+                  }}>
+                    {table.columns?.length || 0}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                  <button
+                    className="table-action-btn"
+                    onClick={() => toggleMinimize(table.name)}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.2)',
+                      border: 'none',
+                      borderRadius: '4px',
+                      color: 'white',
+                      cursor: 'pointer',
+                      padding: '0.25rem 0.5rem',
+                      fontSize: '0.875rem',
+                      fontWeight: 'bold',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.3)'}
+                    onMouseLeave={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.2)'}
+                    title="Minimize"
+                  >
+                    −
+                  </button>
+                  <button
+                    className="table-action-btn"
+                    onClick={() => toggleMaximize(table.name)}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.2)',
+                      border: 'none',
+                      borderRadius: '4px',
+                      color: 'white',
+                      cursor: 'pointer',
+                      padding: '0.25rem 0.5rem',
+                      fontSize: '0.875rem',
+                      fontWeight: 'bold',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.3)'}
+                    onMouseLeave={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.2)'}
+                    title={state.maximized ? "Restore" : "Maximize"}
+                  >
+                    {state.maximized ? '◱' : '□'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Columns */}
+              {!state.minimized && (
+                <div style={{
+                  padding: '0.5rem',
+                  maxHeight: state.maximized ? '600px' : '400px',
+                  overflowY: 'auto'
+                }}>
+                  {table.columns?.map((col, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: '0.5rem 0.75rem',
+                        background: idx % 2 === 0
+                          ? (darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)')
+                          : 'transparent',
+                        borderRadius: '4px',
+                        fontSize: '0.875rem',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={{
+                          color: theme.text,
+                          fontWeight: '500',
+                          fontFamily: 'monospace'
+                        }}>
+                          {col.name}
+                        </div>
+                        <div style={{
+                          color: theme.textSecondary,
+                          fontSize: '0.75rem',
+                          marginTop: '0.125rem'
+                        }}>
+                          {col.type.toUpperCase()}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        {col.primary_key && (
+                          <span
+                            style={{
+                              color: theme.warning,
+                              fontSize: '1rem',
+                              fontWeight: 'bold'
+                            }}
+                            title="Primary Key"
+                          >
+                            ●
+                          </span>
+                        )}
+                        {!col.nullable && (
+                          <span
+                            style={{
+                              color: theme.error,
+                              fontSize: '0.875rem',
+                              fontWeight: 'bold'
+                            }}
+                            title="NOT NULL"
+                          >
+                            *
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      <style>{`
+        /* Custom scrollbar */
+        div::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+
+        div::-webkit-scrollbar-track {
+          background: ${theme.background};
+        }
+
+        div::-webkit-scrollbar-thumb {
+          background: ${theme.border};
+          border-radius: 4px;
+        }
+
+        div::-webkit-scrollbar-thumb:hover {
+          background: ${theme.primary};
+        }
+      `}</style>
     </div>
   );
 }

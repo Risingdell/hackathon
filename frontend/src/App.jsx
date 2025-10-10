@@ -5,6 +5,7 @@ import SchemaExplorer from './SchemaExplorer';
 import QueryHistory from './QueryHistory';
 import ResultsTable from './ResultsTable';
 import DatabaseFlowchart from './DatabaseFlowchart';
+import DatabaseConfig from './DatabaseConfig';
 
 function App() {
   const [nlQuery, setNlQuery] = useState("");
@@ -33,6 +34,14 @@ function App() {
       return localStorage.getItem('nl2sql_sessionId') || null;
     } catch (error) {
       return null;
+    }
+  });
+  const [isConfigured, setIsConfigured] = useState(() => {
+    // Check if database is already configured
+    try {
+      return localStorage.getItem('nl2sql_dbConfigured') === 'true';
+    } catch (error) {
+      return false;
     }
   });
 
@@ -221,6 +230,15 @@ function App() {
     setQueryHistory([]);
   };
 
+  const handleDatabaseConnect = (config) => {
+    setIsConfigured(true);
+    try {
+      localStorage.setItem('nl2sql_dbConfigured', 'true');
+    } catch (error) {
+      console.error('Failed to save database configuration status:', error);
+    }
+  };
+
   // Theme colors
   const theme = {
     dark: {
@@ -250,6 +268,11 @@ function App() {
   };
 
   const currentTheme = darkMode ? theme.dark : theme.light;
+
+  // Show database configuration page if not configured
+  if (!isConfigured) {
+    return <DatabaseConfig onConnect={handleDatabaseConnect} darkMode={darkMode} theme={currentTheme} />;
+  }
 
   if (!backendReady) {
     return (
@@ -286,6 +309,7 @@ function App() {
       background: currentTheme.background,
       color: currentTheme.text,
       transition: "all 0.3s ease"
+
     }}>
       {/* Header */}
       <header style={{
@@ -312,10 +336,7 @@ function App() {
               margin: 0,
               fontSize: "1.75rem",
               fontWeight: "700",
-              background: `linear-gradient(135deg, ${currentTheme.primary} 0%, ${currentTheme.accent} 100%)`,
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
+              color: currentTheme.text,
               display: "flex",
               alignItems: "center",
               gap: "0.75rem",
@@ -323,7 +344,13 @@ function App() {
             }}
             className="app-title">
               <span style={{ fontSize: "2rem" }}></span>
-              <span>Natural Language to SQL</span>
+              <span style={{
+                background: `linear-gradient(135deg, ${currentTheme.primary} 0%, ${currentTheme.accent} 100%)`,
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+                display: "inline-block"
+              }}>ASKDB</span>
             </h1>
             <p style={{
               margin: "0.25rem 0 0 0",
@@ -331,11 +358,11 @@ function App() {
               fontSize: "0.95rem"
             }}
             className="app-subtitle">
-              Developer-friendly SQL query interface with AI-powered natural language processing
+              ASKDB-Developer-friendly SQL query interface with AI-powered natural language processing
             </p>
           </div>
 
-          {/* View Toggle & Theme Toggle */}
+          {/* View Toggle & Theme Toggle & DB Config */}
           <div style={{ display: 'flex', gap: '0.75rem', flexShrink: 0 }}>
             <button
               onClick={() => setViewMode(viewMode === 'query' ? 'flowchart' : 'query')}
@@ -365,6 +392,41 @@ function App() {
               {viewMode === 'query' ? '📐' : '💬'}
               <span style={{ fontSize: "0.85rem", fontWeight: "600" }} className="theme-label">
                 {viewMode === 'query' ? 'Flowchart' : 'Query'}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setIsConfigured(false);
+                localStorage.removeItem('nl2sql_dbConfigured');
+              }}
+              style={{
+                background: currentTheme.cardBg,
+                border: `2px solid ${currentTheme.border}`,
+                borderRadius: "10px",
+                padding: "0.75rem 1.25rem",
+                cursor: "pointer",
+                fontSize: "1.5rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                transition: "all 0.2s ease",
+                color: currentTheme.text
+              }}
+              className="db-config-toggle"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = currentTheme.secondary;
+                e.currentTarget.style.transform = "scale(1.05)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = currentTheme.border;
+                e.currentTarget.style.transform = "scale(1)";
+              }}
+              title="Change Database Configuration"
+            >
+              🗄️
+              <span style={{ fontSize: "0.85rem", fontWeight: "600" }} className="theme-label">
+                DB Config
               </span>
             </button>
 
@@ -534,7 +596,7 @@ function App() {
                     : "0 4px 12px rgba(59, 130, 246, 0.4)";
                 }}
               >
-                {loading ? "⏳ Generating SQL..." : "🚀 Execute Query"}
+                {loading ? "⏳ Generating SQL..." : " Execute Query"}
               </button>
 
               {result?.sql && (
@@ -556,7 +618,7 @@ function App() {
                   onMouseLeave={(e) => e.currentTarget.style.opacity = "1"}
                   title="Copy SQL to clipboard"
                 >
-                  {copiedSql ? "✓ Copied!" : "📋 Copy SQL"}
+                  {copiedSql ? "✓ Copied!" : " Copy SQL"}
                 </button>
               )}
             </div>

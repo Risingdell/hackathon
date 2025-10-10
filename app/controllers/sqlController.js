@@ -1,4 +1,4 @@
-const pool = require('../db');
+const { getPool, updatePoolConfig, testConnection } = require('../db');
 const axios = require('axios');
 
 // FastAPI endpoint URL
@@ -74,6 +74,7 @@ async function runQuery(req, res) {
         // Execute SQL in PostgreSQL
         let dbResult;
         try {
+            const pool = getPool();
             dbResult = await pool.query(sql_query);
         } catch (dbError) {
             console.error('Database Error:', dbError.message);
@@ -121,4 +122,64 @@ async function checkAIServiceHealth(req, res) {
     }
 }
 
-module.exports = { runQuery, checkAIServiceHealth };
+// Connect to database with custom configuration
+async function connectDatabase(req, res) {
+    const { user, host, database, password, port } = req.body;
+
+    // Validate input
+    if (!user || !host || !database || !password || !port) {
+        return res.status(400).json({
+            success: false,
+            error: 'All database configuration fields are required'
+        });
+    }
+
+    const config = {
+        user,
+        host,
+        database,
+        password,
+        port: parseInt(port)
+    };
+
+    try {
+        console.log(`Testing connection to database: ${database} at ${host}:${port}`);
+
+        // Test the connection first
+        const testResult = await testConnection(config);
+
+        if (!testResult.success) {
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to connect to database',
+                details: testResult.error
+            });
+        }
+
+        // Update the pool configuration
+        updatePoolConfig(config);
+
+        console.log(`Successfully connected to database: ${database}`);
+
+        res.json({
+            success: true,
+            message: 'Successfully connected to database',
+            config: {
+                user,
+                host,
+                database,
+                port
+            }
+        });
+
+    } catch (err) {
+        console.error('Connection Error:', err);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to connect to database',
+            details: err.message
+        });
+    }
+}
+
+module.exports = { runQuery, checkAIServiceHealth, connectDatabase };
